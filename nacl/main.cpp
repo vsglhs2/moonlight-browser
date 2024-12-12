@@ -9,16 +9,15 @@
 #include <vector>
 
 uint32_t convertUInt8ArrayToUInt32(uint8_t *bytes) {
-  return (bytes[0] << 24 | (bytes[1] << 16) | (bytes[2] << 8) | (bytes[3]));
+  uint32_t value = (uint32_t)(bytes[0]) | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24);
+  return ntohl(value);
 }
 
 void convertUInt32ToUInt8Array(uint32_t value, uint8_t *array) {
-  uint8_t *bytes = (uint8_t *)&value;
-
-  array[0] = bytes[0];
-  array[1] = bytes[1];
-  array[2] = bytes[2];
-  array[3] = bytes[3];
+  array[0] = (value >> 24) & 0xFF;
+  array[1] = (value >> 16) & 0xFF;
+  array[2] = (value >> 8) & 0xFF;
+  array[3] = value & 0xFF;
 }
 
 void insertToVector(std::vector<uint8_t> &vector, uint8_t *dataPtr,
@@ -31,6 +30,10 @@ void writeUInt32ToVector(std::vector<uint8_t> &vector, uint32_t value) {
   convertUInt32ToUInt8Array(value, bytes);
 
   insertToVector(vector, bytes, sizeof(value));
+}
+
+uint32_t readUInt32FromVector(std::vector<uint8_t> &vector, uint32_t offset) {
+  return convertUInt8ArrayToUInt32(vector.data() + offset);
 }
 
 namespace pp {
@@ -50,7 +53,7 @@ public:
   size_t size;
 
 private:
-  void initialize(const char *string) {
+  void initializeString(const char *string) {
     int index = 0;
 
     this->size = strlen(string);
@@ -64,9 +67,16 @@ private:
   }
 
 public:
-  Var(char *string) { this->initialize(string); }
+  Var(uint32_t number) {
+    this->size = sizeof(uint32_t) / sizeof(uint8_t);
+    this->bytes = new uint8_t[this->size];
 
-  Var(std::string string = "") { this->initialize(string.c_str()); }
+    convertUInt32ToUInt8Array(number, bytes);
+  }
+
+  Var(char *string) { this->initializeString(string); }
+
+  Var(std::string string = "") { this->initializeString(string.c_str()); }
 
 public:
   ~Var() { delete this->bytes; }
@@ -80,6 +90,35 @@ public:
   uint8_t *buffer;
 
   uint8_t *Map() { return this->buffer; }
+};
+
+class VarItem {
+public:
+  uint8_t *bytes;
+  uint32_t size;
+
+public:
+  VarItem(uint8_t *bytes, uint32_t size) {
+    this->bytes = bytes;
+    this->size = size;
+  }
+
+  int32_t AsInt() {
+    return convertUInt8ArrayToUInt32(bytes);
+  }
+
+  std::string AsString() {
+    char chars[this->size + 1];
+
+    for (uint32_t index = 0; index < this->size; index++) {
+      chars[index] = bytes[index];
+    }
+    chars[this->size] += '\0';
+
+    return (std::string)chars;
+  }
+
+  bool AsBool() { return (bool)this->bytes[0]; }
 };
 
 /**
@@ -159,31 +198,19 @@ public:
     this->addEntry(type.c_str(), (uint8_t *)string, strlen(string),
                    DataType::STRING);
   }
-};
-
-class VarArrayItem {
-private:
-  uint8_t *bytes;
-  uint32_t size;
 
 public:
-  VarArrayItem(uint8_t *bytes, uint32_t size) {
-    this->bytes = bytes;
-    this->size = size;
+  VarItem Get(std::string type) {
+    std::vector<uint8_t> &vector = this->map[type];
+
+    uint32_t keySize = readUInt32FromVector(vector, 0);
+    uint32_t dataSize = readUInt32FromVector(vector, sizeof(uint32_t));
+
+    uint32_t offset = 3 * sizeof(uint32_t) + keySize;
+
+    std::cout << "Get: " << type << " " << dataSize << " " << offset << std::endl;
+    return VarItem(vector.data() + offset, dataSize);
   }
-
-  std::string AsString() {
-    char chars[this->size + 1];
-
-    for (uint32_t index = 0; index < this->size; index++) {
-      chars[index] = bytes[index];
-    }
-    chars[this->size] += '\0';
-
-    return (std::string)chars;
-  }
-
-  bool AsBool() { return (bool)this->bytes[0]; }
 };
 
 // TODO: add error handling
@@ -203,7 +230,16 @@ private:
   uint8_t *bytes;
 
 public:
+  VarArray(VarItem item) {
+    this->initialize(item.bytes);
+  }
+
   VarArray(uint8_t *bytes) {
+    this->initialize(bytes);
+  }
+
+public:
+  void initialize(uint8_t *bytes) {
     const uint32_t OFFSET = sizeof(uint32_t);
     uint8_t *pointer = bytes;
 
@@ -228,12 +264,12 @@ public:
   }
 
 public:
-  VarArrayItem Get(int index) {
+  VarItem Get(int index) {
     uint32_t size = this->sizes[index];
     uint32_t offset = this->offsets[index];
 
     std::cout << "Get: " << index << " " << size << " " << offset << std::endl;
-    return VarArrayItem(this->bytes + offset, size);
+    return VarItem(this->bytes + offset, size);
   }
 
 public:
@@ -260,21 +296,14 @@ int main() {
                      // true
                      0x01};
 
-  pp::VarArray args = pp::VarArray(BYTES);
-  std::string arg0 = args.Get(0).AsString();
-  std::string arg1 = args.Get(1).AsString();
-  bool arg2 = args.Get(2).AsBool();
-
-  std::cout << arg0 << " " << arg1 << " " << arg2 << std::endl;
-
   pp::Var var("Hello");
   pp::Var var2;
 
   std::cout << var.size << " " << var2.size << " " << std::endl;
 
   pp::VarArrayBuffer buffer;
-  buffer.buffer = new uint8_t[10];
-  buffer.size = 10;
+  buffer.buffer = BYTES;
+  buffer.size = sizeof(BYTES);
 
   pp::VarDictionary dict2;
   dict2.Set("privateKey", "This is private key");
@@ -283,11 +312,24 @@ int main() {
   std::cout << dict2.Bytes().size() << std::endl;
 
   pp::VarDictionary dict;
-  dict.Set("callbackId", 2349);
+  dict.Set("callbackId", pp::Var(239443));
   dict.Set("type", pp::Var("success"));
   dict.Set("ret", dict2);
+  dict.Set("params", buffer);
 
   std::cout << dict.Bytes().size() << std::endl;
+
+  pp::VarArray args = pp::VarArray(dict.Get("params"));
+  std::string arg0 = args.Get(0).AsString();
+  std::string arg1 = args.Get(1).AsString();
+  bool arg2 = args.Get(2).AsBool();
+
+  std::cout << arg0 << " " << arg1 << " " << arg2 << std::endl;
+
+  int32_t callbackId = dict.Get("callbackId").AsInt();
+  std::string method = dict.Get("type").AsString();
+
+  std::cout << callbackId << " " << method << std::endl;
 
   return 0;
 }

@@ -38,10 +38,10 @@ void MoonlightInstance::OnConnectionStarted(uint32_t unused) {
     // Tell the front end
     pp::Var response("Connection Established");
     PostMessage(response);
-    
+
     // Start receiving input events
     RequestInputEvents(PP_INPUTEVENT_CLASS_MOUSE | PP_INPUTEVENT_CLASS_WHEEL | PP_INPUTEVENT_CLASS_TOUCH);
-    
+
     // Filtering is suboptimal but it ensures that we can pass keyboard events
     // to the browser when mouse lock is disabled. This is neccessary for Esc
     // to kick the app out of full-screen.
@@ -51,16 +51,16 @@ void MoonlightInstance::OnConnectionStarted(uint32_t unused) {
 void MoonlightInstance::OnConnectionStopped(uint32_t error) {
     // Not running anymore
     m_Running = false;
-    
+
     // Stop receiving input events
     ClearInputEventRequest(PP_INPUTEVENT_CLASS_MOUSE |
                            PP_INPUTEVENT_CLASS_WHEEL |
                            PP_INPUTEVENT_CLASS_KEYBOARD |
                            PP_INPUTEVENT_CLASS_TOUCH);
-    
+
     // Unlock the mouse
     UnlockMouseOrJustReleaseInput();
-    
+
     // Notify the JS code that the stream has ended
     pp::Var response(std::string(MSG_STREAM_TERMINATED) + std::to_string((int)error));
     PostMessage(response);
@@ -68,11 +68,11 @@ void MoonlightInstance::OnConnectionStopped(uint32_t error) {
 
 void MoonlightInstance::StopConnection() {
     pthread_t t;
-    
+
     // Stopping needs to happen in a separate thread to avoid a potential deadlock
     // caused by us getting a callback to the main thread while inside LiStopConnection.
     pthread_create(&t, NULL, MoonlightInstance::StopThreadFunc, NULL);
-    
+
     // We'll need to call the listener ourselves since our connection terminated callback
     // won't be invoked for a manually requested termination.
     OnConnectionStopped(0);
@@ -109,11 +109,11 @@ void* MoonlightInstance::InputThreadFunc(void* context) {
     while (me->m_Running) {
         me->PollGamepads();
         me->ReportMouseMovement();
-        
+
         // Poll every 5 ms
         usleep(5 * 1000);
     }
-    
+
     return NULL;
 }
 
@@ -121,18 +121,18 @@ void* MoonlightInstance::ConnectionThreadFunc(void* context) {
     MoonlightInstance* me = (MoonlightInstance*)context;
     int err;
     SERVER_INFORMATION serverInfo;
-    
+
     // Post a status update before we begin
     pp::Var response("Starting connection to " + me->m_Host);
     me->PostMessage(response);
-    
+
     LiInitializeServerInformation(&serverInfo);
     serverInfo.address = me->m_Host.c_str();
     serverInfo.serverInfoAppVersion = me->m_AppVersion.c_str();
     serverInfo.serverInfoGfeVersion = me->m_GfeVersion.c_str();
     serverInfo.rtspSessionUrl = me->m_RtspUrl.c_str();
     serverInfo.serverCodecModeSupport = SCM_H264;
-    
+
     err = LiStartConnection(&serverInfo,
                             &me->m_StreamConfig,
                             &MoonlightInstance::s_ClCallbacks,
@@ -148,26 +148,26 @@ void* MoonlightInstance::ConnectionThreadFunc(void* context) {
         me->PostMessage(response);
         return NULL;
     }
-    
+
     // Set running state before starting connection-specific threads
     me->m_Running = true;
-    
+
     pthread_create(&me->m_InputThread, NULL, MoonlightInstance::InputThreadFunc, me);
-    
+
     return NULL;
 }
 
 // hook from javascript into the CPP code.
-void MoonlightInstance::HandleMessage(const pp::Var& var_message) {
-     // Ignore the message if it is not a string.
-    if (!var_message.is_dictionary())
-        return;
-    
-    pp::VarDictionary msg(var_message);
+void MoonlightInstance::HandleMessage(const pp::VarDictionary& msg) {
+    //  // Ignore the message if it is not a string.
+    // if (!var_message.is_dictionary())
+    //     return;
+
+    // pp::VarDictionary msg(var_message);
     int32_t callbackId = msg.Get("callbackId").AsInt();
     std::string method = msg.Get("method").AsString();
     pp::VarArray params(msg.Get("params"));
-    
+
     if (strcmp(method.c_str(), MSG_START_REQUEST) == 0) {
         HandleStartStream(callbackId, params);
     } else if (strcmp(method.c_str(), MSG_STOP_REQUEST) == 0) {
@@ -206,7 +206,7 @@ void MoonlightInstance::HandleStartStream(int32_t callbackId, pp::VarArray args)
     std::string appversion = args.Get(8).AsString();
     std::string gfeversion = args.Get(9).AsString();
     std::string rtspurl = args.Get(10).AsString();
-    
+
     pp::Var response("Setting stream width to: " + width);
     PostMessage(response);
     response = ("Setting stream height to: " + height);
@@ -229,7 +229,7 @@ void MoonlightInstance::HandleStartStream(int32_t callbackId, pp::VarArray args)
     PostMessage(response);
     response = ("Setting RTSP URL to: " + rtspurl);
     PostMessage(response);
-    
+
     // Populate the stream configuration
     LiInitializeStreamConfiguration(&m_StreamConfig);
     m_StreamConfig.width = stoi(width);
@@ -256,7 +256,7 @@ void MoonlightInstance::HandleStartStream(int32_t callbackId, pp::VarArray args)
     m_GfeVersion = gfeversion;
     m_RtspUrl = rtspurl;
     m_MouseLockingFeatureEnabled = stoi(mouse_lock);
-    
+
     // Initialize the rendering surface before starting the connection
     if (InitializeRenderingSurface(m_StreamConfig.width, m_StreamConfig.height)) {
         // Start the worker thread to establish the connection
@@ -265,7 +265,7 @@ void MoonlightInstance::HandleStartStream(int32_t callbackId, pp::VarArray args)
         // Failed to initialize renderer
         OnConnectionStopped(0);
     }
-    
+
     pp::VarDictionary ret;
     ret.Set("callbackId", pp::Var(callbackId));
     ret.Set("type", pp::Var("resolve"));
@@ -276,7 +276,7 @@ void MoonlightInstance::HandleStartStream(int32_t callbackId, pp::VarArray args)
 void MoonlightInstance::HandleStopStream(int32_t callbackId, pp::VarArray args) {
     // Begin connection teardown
     StopConnection();
-    
+
     pp::VarDictionary ret;
     ret.Set("callbackId", pp::Var(callbackId));
     ret.Set("type", pp::Var("resolve"));
@@ -297,7 +297,7 @@ void MoonlightInstance::HandlePair(int32_t callbackId, pp::VarArray args) {
 void MoonlightInstance::PairCallback(int32_t /*result*/, int32_t callbackId, pp::VarArray args) {
     char* ppkstr;
     int err = gs_pair(atoi(args.Get(0).AsString().c_str()), args.Get(1).AsString().c_str(), args.Get(2).AsString().c_str(), &ppkstr);
-    
+
     pp::VarDictionary ret;
     ret.Set("callbackId", pp::Var(callbackId));
     if (err == 0) {
@@ -321,7 +321,7 @@ void MoonlightInstance::HandleSTUN(int32_t callbackId, pp::VarArray args) {
 void MoonlightInstance::STUNCallback(int32_t /*result*/, int32_t callbackId, pp::VarArray args) {
     unsigned int wanAddr;
     char addrStr[128] = {};
-    
+
     pp::VarDictionary ret;
     ret.Set("callbackId", pp::Var(callbackId));
     ret.Set("type", pp::Var("resolve"));
