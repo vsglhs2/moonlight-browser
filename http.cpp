@@ -1,6 +1,6 @@
 #include "moonlight.hpp"
 
-#include "ppapi/cpp/var_array_buffer.h"
+// #include "ppapi/cpp/var_array_buffer.h"
 
 #include <http.h>
 #include <errors.h>
@@ -24,32 +24,32 @@ void MoonlightInstance::MakeCert(int32_t callbackId, pp::VarArray args)
     pp::VarDictionary ret;
     ret.Set("callbackId", pp::Var(callbackId));
     ret.Set("type", pp::Var("resolve"));
-    
+
     pp::VarDictionary retData;
-    
+
     CERT_KEY_PAIR certKeyPair = mkcert_generate();
-    
+
     BIO* bio = BIO_new(BIO_s_mem());
-    
+
     PEM_write_bio_X509(bio, certKeyPair.x509);
     BUF_MEM *mem = NULL;
     BIO_get_mem_ptr(bio, &mem);
-    
+
     std::string cert(mem->data, mem->length);
-    
+
     BIO_free(bio);
-    
+
     BIO* biokey = BIO_new(BIO_s_mem());
     PEM_write_bio_PrivateKey(biokey, certKeyPair.pkey, NULL, NULL, 0, NULL, NULL);
     BIO_get_mem_ptr(biokey, &mem);
-    
+
     std::string pkey(mem->data, mem->length);
-    
+
     BIO_free(biokey);
-    
+
     retData.Set("privateKey", pkey.c_str());
     retData.Set("cert", cert.c_str());
-    
+
     ret.Set("ret", retData);
     PostMessage(ret);
 }
@@ -58,25 +58,25 @@ void MoonlightInstance::LoadCert(const char* certStr, const char* keyStr)
 {
     char* _certStr = strdup(certStr);
     char* _keyStr = strdup(keyStr);
-    
+
     BIO *bio = BIO_new_mem_buf(_certStr, -1);
     if(!(g_Cert = PEM_read_bio_X509(bio, NULL, NULL, NULL))) {
         PostMessage(pp::Var("Error loading cert into memory"));
     }
     BIO_free_all(bio);
-    
+
     bio = BIO_new_mem_buf(_keyStr, -1);
     if (!(g_PrivateKey = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL))) {
         PostMessage(pp::Var("Error loading private key into memory"));
     }
     BIO_free_all(bio);
-    
+
     // Convert the PEM cert to hex
     g_CertHex = (char*)malloc((strlen(certStr) * 2) + 1);
     for (int i = 0; i < strlen(certStr); i++) {
         sprintf(&g_CertHex[i * 2], "%02x", certStr[i]);
     }
-    
+
     free(_certStr);
     free(_keyStr);
 }
@@ -118,7 +118,7 @@ void MoonlightInstance::NvHTTPInit(int32_t callbackId, pp::VarArray args)
 
     CRYPTO_set_id_callback(OSSLThreadId);
     CRYPTO_set_locking_callback(OSSLThreadLock);
-    
+
     pp::VarDictionary ret;
     ret.Set("callbackId", pp::Var(callbackId));
     ret.Set("type", pp::Var("resolve"));
@@ -150,7 +150,7 @@ void MoonlightInstance::NvHTTPRequest(int32_t /*result*/, int32_t callbackId, pp
         PostMessage(ret);
         goto clean_data;
     }
-    
+
     err = http_request(url.c_str(), ppkstr.empty() ? NULL : ppkstr.c_str(), data);
     if (err) {
         pp::VarDictionary ret;
@@ -160,31 +160,31 @@ void MoonlightInstance::NvHTTPRequest(int32_t /*result*/, int32_t callbackId, pp
         PostMessage(ret);
         goto clean_data;
     }
-    
+
     if (binaryResponse) {
         // Response data will be returned to JS as an ArrayBuffer
-        
+
         pp::VarDictionary ret;
         ret.Set("callbackId", pp::Var(callbackId));
         ret.Set("type", pp::Var("resolve"));
-        
+
         // Construct an array buffer and copy the response data into it
         pp::VarArrayBuffer arrBuf = pp::VarArrayBuffer(data->size);
         memcpy(arrBuf.Map(), data->memory, data->size);
         arrBuf.Unmap();
-        
+
         ret.Set("ret", arrBuf);
         PostMessage(ret);
     } else {
         // Response data will be returned to JS as a UTF-8 string
-        
+
         pp::VarDictionary ret;
         ret.Set("callbackId", pp::Var(callbackId));
         ret.Set("type", pp::Var("resolve"));
         ret.Set("ret", pp::Var(data->memory));
         PostMessage(ret);
     }
-    
+
 clean_data:
     http_free_data(data);
 }

@@ -1,9 +1,9 @@
 #include "moonlight.hpp"
 
-#include "ppapi/c/ppb_input_event.h"
+// #include "ppapi/c/ppb_input_event.h"
 
-#include "ppapi/cpp/input_event.h"
-#include "ppapi/cpp/mouse_lock.h"
+// #include "ppapi/cpp/input_event.h"
+// #include "ppapi/cpp/mouse_lock.h"
 
 void MoonlightInstance::ClStageStarting(int stage) {
     pp::Var response(std::string("ProgressMsg: Starting ") + std::string(LiGetStageName(stage)) + std::string("..."));
@@ -21,16 +21,16 @@ void MoonlightInstance::ClStageFailed(int stage, int errorCode) {
 }
 
 void MoonlightInstance::ClConnectionStarted(void) {
-    pp::Module::Get()->core()->CallOnMainThread(0,
-        g_Instance->m_CallbackFactory.NewCallback(&MoonlightInstance::OnConnectionStarted));
+    // pp::Module::Get()->core()->CallOnMainThread(0,
+    //  g_Instance->m_CallbackFactory.NewCallback(&MoonlightInstance::OnConnectionStarted));
 }
 
 void MoonlightInstance::ClConnectionTerminated(int errorCode) {
     // Teardown the connection
     LiStopConnection();
-    
-    pp::Module::Get()->core()->CallOnMainThread(0,
-        g_Instance->m_CallbackFactory.NewCallback(&MoonlightInstance::OnConnectionStopped), (uint32_t)errorCode);
+
+    // pp::Module::Get()->core()->CallOnMainThread(0,
+    //     g_Instance->m_CallbackFactory.NewCallback(&MoonlightInstance::OnConnectionStopped), (uint32_t)errorCode);
 }
 
 void MoonlightInstance::ClDisplayMessage(const char* message) {

@@ -7,7 +7,7 @@
 
 #include <pairing.h>
 
-#include "ppapi/cpp/input_event.h"
+// #include "ppapi/cpp/input_event.h"
 
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -285,13 +285,17 @@ void MoonlightInstance::HandleStopStream(int32_t callbackId, pp::VarArray args) 
 }
 
 void MoonlightInstance::HandleOpenURL(int32_t callbackId, pp::VarArray args) {
-    m_HttpThreadPool[m_HttpThreadPoolSequence++ % HTTP_HANDLER_THREADS]->message_loop().PostWork(
-        m_CallbackFactory.NewCallback(&MoonlightInstance::NvHTTPRequest, callbackId, args));
+    // m_HttpThreadPool[m_HttpThreadPoolSequence++ % HTTP_HANDLER_THREADS]->message_loop().PostWork(
+    //     m_CallbackFactory.NewCallback(&MoonlightInstance::NvHTTPRequest, callbackId, args));
+
+    this->NvHTTPRequest(int32_t, callbackId, args);
 }
 
 void MoonlightInstance::HandlePair(int32_t callbackId, pp::VarArray args) {
-     m_HttpThreadPool[m_HttpThreadPoolSequence++ % HTTP_HANDLER_THREADS]->message_loop().PostWork(
-         m_CallbackFactory.NewCallback(&MoonlightInstance::PairCallback, callbackId, args));
+    //  m_HttpThreadPool[m_HttpThreadPoolSequence++ % HTTP_HANDLER_THREADS]->message_loop().PostWork(
+    //      m_CallbackFactory.NewCallback(&MoonlightInstance::PairCallback, callbackId, args));
+
+    this->PairCallback(int32_t, callbackId, args);
 }
 
 void MoonlightInstance::PairCallback(int32_t /*result*/, int32_t callbackId, pp::VarArray args) {
@@ -314,8 +318,10 @@ void MoonlightInstance::PairCallback(int32_t /*result*/, int32_t callbackId, pp:
 }
 
 void MoonlightInstance::HandleSTUN(int32_t callbackId, pp::VarArray args) {
-     m_HttpThreadPool[m_HttpThreadPoolSequence++ % HTTP_HANDLER_THREADS]->message_loop().PostWork(
-         m_CallbackFactory.NewCallback(&MoonlightInstance::STUNCallback, callbackId, args));
+    //  m_HttpThreadPool[m_HttpThreadPoolSequence++ % HTTP_HANDLER_THREADS]->message_loop().PostWork(
+    //      m_CallbackFactory.NewCallback(&MoonlightInstance::STUNCallback, callbackId, args));
+
+    this->STUNCallback(int32_t, callbackId, args);
 }
 
 void MoonlightInstance::STUNCallback(int32_t /*result*/, int32_t callbackId, pp::VarArray args) {

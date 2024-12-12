@@ -1,9 +1,9 @@
 #include "moonlight.hpp"
 
-#include "ppapi/c/ppb_input_event.h"
-#include "ppapi/cpp/mouse_cursor.h"
+// #include "ppapi/c/ppb_input_event.h"
+// #include "ppapi/cpp/mouse_cursor.h"
 
-#include "ppapi/cpp/input_event.h"
+// #include "ppapi/cpp/input_event.h"
 
 #include <Limelight.h>
 
@@ -69,7 +69,7 @@ void MoonlightInstance::MouseLockLost() {
 static char GetModifierFlags(const pp::InputEvent& event) {
     uint32_t modifiers = event.GetModifiers();
     char flags = 0;
-    
+
     if (modifiers & PP_INPUTEVENT_MODIFIER_SHIFTKEY) {
         flags |= MODIFIER_SHIFT;
     }
@@ -79,7 +79,7 @@ static char GetModifierFlags(const pp::InputEvent& event) {
     if (modifiers & PP_INPUTEVENT_MODIFIER_ALTKEY) {
         flags |= MODIFIER_ALT;
     }
-    
+
     return flags;
 }
 
@@ -217,13 +217,13 @@ bool MoonlightInstance::HandleInputEvent(const pp::InputEvent& event) {
                 LockMouseOrJustCaptureInput();
                 return true;
             }
-            
+
             pp::MouseInputEvent mouseEvent(event);
-            
+
             LiSendMouseButtonEvent(BUTTON_ACTION_PRESS, ConvertPPButtonToLiButton(mouseEvent.GetButton()));
             return true;
         }
-        
+
         case PP_INPUTEVENT_TYPE_MOUSEMOVE: {
             if (!m_MouseLocked) {
                 return false;
@@ -232,7 +232,7 @@ bool MoonlightInstance::HandleInputEvent(const pp::InputEvent& event) {
             pp::MouseInputEvent mouseEvent(event);
             pp::Point posDelta = mouseEvent.GetMovement();
             pp::Point position = mouseEvent.GetPosition();
-            
+
             // Wait to report mouse movement until the next input polling window
             // to allow batching to occur which reduces overall input lag.
             if (m_MouseLocked) {
@@ -244,42 +244,42 @@ bool MoonlightInstance::HandleInputEvent(const pp::InputEvent& event) {
                     m_MousePositionY = position.y();
                 }
             }
-            
+
             return true;
         }
-        
+
         case PP_INPUTEVENT_TYPE_MOUSEUP: {
             if (!m_MouseLocked) {
                 return false;
             }
-            
+
             pp::MouseInputEvent mouseEvent(event);
-            
+
             LiSendMouseButtonEvent(BUTTON_ACTION_RELEASE, ConvertPPButtonToLiButton(mouseEvent.GetButton()));
             return true;
         }
-        
+
         case PP_INPUTEVENT_TYPE_WHEEL: {
             if (!m_MouseLocked) {
                 return false;
             }
-            
+
             pp::WheelInputEvent wheelEvent(event);
-            
+
             // Accumulate the current tick value
             m_AccumulatedTicks += wheelEvent.GetTicks().y();
             return true;
         }
-        
+
         case PP_INPUTEVENT_TYPE_KEYDOWN: {
             if (!m_MouseLocked) {
                 return false;
             }
-            
+
             pp::KeyboardInputEvent keyboardEvent(event);
             char modifiers = GetModifierFlags(event);
             uint32_t keyCode = GetTranslatedKeyCode(keyboardEvent);
-            
+
             if (modifiers == (MODIFIER_ALT | MODIFIER_CTRL | MODIFIER_SHIFT)) {
                 if (keyCode == 0x51) { // Q key
                     // Terminate the connection
@@ -291,7 +291,7 @@ bool MoonlightInstance::HandleInputEvent(const pp::InputEvent& event) {
                     m_WaitingForAllModifiersUp = true;
                 }
             }
-            
+
             if (event.GetModifiers() & PP_INPUTEVENT_MODIFIER_ISAUTOREPEAT) {
                 return true;
             }
@@ -300,21 +300,21 @@ bool MoonlightInstance::HandleInputEvent(const pp::InputEvent& event) {
                                 KEY_ACTION_DOWN, modifiers);
             return true;
         }
-        
+
         case PP_INPUTEVENT_TYPE_KEYUP: {
             if (!m_MouseLocked) {
                 return false;
             }
-            
+
             pp::KeyboardInputEvent keyboardEvent(event);
             char modifiers = GetModifierFlags(event);
             uint32_t keyCode = GetTranslatedKeyCode(keyboardEvent);
-             
+
             // Check if all modifiers are up now
             if (m_WaitingForAllModifiersUp && modifiers == 0) {
                 UnlockMouseOrJustReleaseInput();
             }
-            
+
             LiSendKeyboardEvent(KEY_PREFIX << 8 | keyCode,
                                 KEY_ACTION_UP, modifiers);
             return true;
@@ -357,7 +357,7 @@ bool MoonlightInstance::HandleInputEvent(const pp::InputEvent& event) {
             }
             return true;
         }
-        
+
         default: {
             return false;
         }

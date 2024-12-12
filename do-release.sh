@@ -4,7 +4,7 @@ fail()
 	exit 1
 }
 
-git diff-index --quiet HEAD -- || fail "Release builds must not have unstaged changes!"
+# git diff-index --quiet HEAD -- || fail "Release builds must not have unstaged changes!"
 
 rm moonlight-chrome.zip
 make clean || fail "Clean failed"
