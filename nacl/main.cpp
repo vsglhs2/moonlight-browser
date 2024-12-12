@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <map>
 #include <ostream>
 #include <stdint.h>
 #include <string>
@@ -11,7 +12,7 @@ uint32_t convertUInt8ArrayToUInt32(uint8_t *bytes) {
   return (bytes[0] << 24 | (bytes[1] << 16) | (bytes[2] << 8) | (bytes[3]));
 }
 
-uint8_t *convertUInt32ToUInt8Array(uint32_t value, uint8_t *array) {
+void convertUInt32ToUInt8Array(uint32_t value, uint8_t *array) {
   uint8_t *bytes = (uint8_t *)&value;
 
   array[0] = bytes[0];
@@ -20,7 +21,27 @@ uint8_t *convertUInt32ToUInt8Array(uint32_t value, uint8_t *array) {
   array[3] = bytes[3];
 }
 
+void insertToVector(std::vector<uint8_t> &vector, uint8_t *dataPtr,
+                    uint32_t size) {
+  vector.insert(vector.end(), dataPtr, dataPtr + size);
+}
+
+void writeUInt32ToVector(std::vector<uint8_t> &vector, uint32_t value) {
+  uint8_t bytes[4];
+  convertUInt32ToUInt8Array(value, bytes);
+
+  insertToVector(vector, bytes, sizeof(value));
+}
+
 namespace pp {
+enum DataType {
+  STRING,
+  VAR,
+  ARRAY_BUFFER,
+  VAR_DICTIONARY,
+  NUMBER,
+};
+
 class Var {
 public:
   uint8_t *bytes;
@@ -28,8 +49,8 @@ public:
 public:
   size_t size;
 
-public:
-  Var(char *string = "") {
+private:
+  void initialize(const char *string) {
     int index = 0;
 
     this->size = strlen(string);
@@ -41,6 +62,11 @@ public:
       index++;
     }
   }
+
+public:
+  Var(char *string) { this->initialize(string); }
+
+  Var(std::string string = "") { this->initialize(string.c_str()); }
 
 public:
   ~Var() { delete this->bytes; }
@@ -56,96 +82,82 @@ public:
   uint8_t *Map() { return this->buffer; }
 };
 
+/**
+  Bytes will have following structure:
+  1)  4 byte number of entries
+  2)  for each entry
+    a)  4 byte number for key size
+    b)  4 byte number for data size
+    c)  4 byte number for data type
+    d)  a bytes sized key
+    e)  b bytes sized data
+ */
 class VarDictionary {
 public:
-  std::vector<uint8_t> ret;
+  std::map<std::string, std::vector<uint8_t> > map;
 
 public:
-  std::vector<uint8_t> callbackId;
-
-public:
-  std::vector<uint8_t> type;
-
-public:
-  VarDictionary() {
-    this->type = std::vector<uint8_t>();
-    this->callbackId = std::vector<uint8_t>();
-    this->ret = std::vector<uint8_t>();
-  }
+  VarDictionary() { this->map = std::map<std::string, std::vector<uint8_t> >(); }
 
 public:
   std::vector<uint8_t> Bytes() {
-    std::cout << this->callbackId.size() << " " << this->type.size() << " "
-              << this->ret.size() << std::endl;
-
     std::vector<uint8_t> bytes = std::vector<uint8_t>();
-    bytes.insert(bytes.end(), this->callbackId.begin(), this->callbackId.end());
-    bytes.insert(bytes.end(), this->type.begin(), this->type.end());
-    bytes.insert(bytes.end(), this->ret.begin(), this->ret.end());
+
+    writeUInt32ToVector(bytes, this->map.size());
+
+    for (auto itr = this->map.begin(); itr != this->map.end(); itr++) {
+      writeUInt32ToVector(bytes, itr->second.size());
+      insertToVector(bytes, itr->second.data(), itr->second.size());
+    }
 
     return bytes;
   }
 
+private:
+  void addEntry(const char *key, uint8_t *dataPtr, uint32_t dataSize,
+                DataType dataType) {
+    this->map[key] = std::vector<uint8_t>();
+    std::vector<uint8_t> &vector = this->map[key];
+    uint32_t keySize = strlen(key);
+
+    writeUInt32ToVector(vector, keySize);
+    writeUInt32ToVector(vector, dataSize);
+    writeUInt32ToVector(vector, dataType);
+
+    insertToVector(vector, (uint8_t *)key, keySize);
+    insertToVector(vector, dataPtr, dataSize);
+  }
+
 public:
   void Set(std::string type, VarArrayBuffer buffer) {
-    if (type == "ret") {
-      uint8_t size[4];
-      convertUInt32ToUInt8Array(buffer.size, size);
-
-      this->ret.insert(this->ret.end(), size, size + sizeof(uint32_t));
-      this->ret.insert(this->ret.end(), buffer.buffer,
-                       buffer.buffer + buffer.size);
-    }
+    this->addEntry(type.c_str(), buffer.buffer, buffer.size,
+                   DataType::ARRAY_BUFFER);
   }
 
 public:
   void Set(std::string type, VarDictionary dict) {
-    if (type == "ret") {
-      std::vector<uint8_t> bytes = dict.Bytes();
-
-      uint8_t size[4];
-      convertUInt32ToUInt8Array(bytes.size(), size);
-
-      this->ret.insert(this->ret.end(), size, size + sizeof(uint32_t));
-      this->ret.insert(this->ret.end(), bytes.begin(),
-                       bytes.begin() + bytes.size());
-    }
+    std::vector<uint8_t> bytes = dict.Bytes();
+    this->addEntry(type.c_str(), bytes.data(), bytes.size(),
+                   DataType::VAR_DICTIONARY);
   }
 
 public:
   void Set(std::string type, Var var) {
-    if (type == "type") {
-      uint8_t size[4];
-      convertUInt32ToUInt8Array(var.size, size);
-
-      this->type.insert(this->type.end(), size, size + sizeof(uint32_t));
-      this->type.insert(this->type.end(), var.bytes, var.bytes + var.size);
-    }
-
-    if (type == "ret") {
-      uint8_t size[4];
-      convertUInt32ToUInt8Array(var.size, size);
-
-      this->ret.insert(this->ret.end(), size, size + sizeof(uint32_t));
-      this->ret.insert(this->ret.end(), var.bytes, var.bytes + var.size);
-    }
+    this->addEntry(type.c_str(), var.bytes, var.size, DataType::VAR);
   }
 
 public:
   void Set(std::string type, uint32_t callbackId) {
+    uint8_t bytes[4];
+    convertUInt32ToUInt8Array(callbackId, bytes);
 
-    if (type == "callbackId") {
-      uint8_t size[4];
-      convertUInt32ToUInt8Array(4, size);
+    this->addEntry(type.c_str(), bytes, sizeof(uint32_t), DataType::NUMBER);
+  }
 
-      uint8_t bytes[4];
-      convertUInt32ToUInt8Array(callbackId, bytes);
-
-      this->callbackId.insert(this->callbackId.end(), size,
-                              size + sizeof(uint32_t));
-      this->callbackId.insert(this->callbackId.end(), bytes,
-                              bytes + sizeof(uint32_t));
-    }
+public:
+  void Set(std::string type, char *string) {
+    this->addEntry(type.c_str(), (uint8_t *)string, strlen(string),
+                   DataType::STRING);
   }
 };
 
@@ -175,7 +187,15 @@ public:
 };
 
 // TODO: add error handling
+// TODO: figure out why lldb debugger leaks memory (maybe something wrong with code?)
 
+/**
+  bytes must have following structure:
+  1)  4 byte number of arguments
+  2)  for each argument
+    a)  4 byte number for argument size
+    b)  a bytes sized argument
+ */
 class VarArray {
 private:
   uint32_t *sizes;
@@ -197,14 +217,11 @@ public:
       uint32_t argSize = convertUInt8ArrayToUInt32(pointer);
       pointer += OFFSET;
 
-      this->sizes[index] = argSize;
-    }
-
-    for (int index = 0; index < argsAmount; index++) {
       uint32_t indexOffset = pointer - bytes;
-      this->offsets[index] = indexOffset;
+      pointer += argSize;
 
-      pointer += this->sizes[index];
+      this->sizes[index] = argSize;
+      this->offsets[index] = indexOffset;
     }
 
     this->bytes = bytes;
@@ -232,14 +249,14 @@ int main() {
                      0x0, 0x0, 0x0, 0x03,
                      // 1 arg - 3 bytes
                      0x0, 0x0, 0x0, 0x03,
-                     // 2 arg - 11 bytes
-                     0x0, 0x0, 0x0, 0x0a,
-                     // 3 arg - 1 byte
-                     0x0, 0x0, 0x0, 0x01,
                      // "hey"
                      0x68, 0x65, 0x79,
+                     // 2 arg - 11 bytes
+                     0x0, 0x0, 0x0, 0x0a,
                      // "llo, world"
                      0x6C, 0x6C, 0x6F, 0x2C, 0x20, 0x77, 0x6F, 0x72, 0x6C, 0x64,
+                     // 3 arg - 1 byte
+                     0x0, 0x0, 0x0, 0x01,
                      // true
                      0x01};
 
@@ -259,19 +276,18 @@ int main() {
   buffer.buffer = new uint8_t[10];
   buffer.size = 10;
 
+  pp::VarDictionary dict2;
+  dict2.Set("privateKey", "This is private key");
+  dict2.Set("cert", "Hello cert");
+
+  std::cout << dict2.Bytes().size() << std::endl;
+
   pp::VarDictionary dict;
   dict.Set("callbackId", 2349);
   dict.Set("type", pp::Var("success"));
-  dict.Set("ret", buffer);
+  dict.Set("ret", dict2);
 
   std::cout << dict.Bytes().size() << std::endl;
-
-  pp::VarDictionary dict2;
-  dict2.Set("callbackId", 28849);
-  dict2.Set("type", pp::Var("reject"));
-  dict2.Set("ret", dict);
-
-  std::cout << dict2.Bytes().size() << std::endl;
 
   return 0;
 }
