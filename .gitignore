@@ -48,3 +48,5 @@ dir.stamp
 
 # Visual Studio
 *.vs/
+
+emsdk*

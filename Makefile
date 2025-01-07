@@ -13,6 +13,8 @@ include ports.mk
 EXTRA_INC_PATHS := $(EXTRA_INC_PATHS) $(NACL_C_INCLUDE) $(COMMON_C_INCLUDE) $(OPUS_INCLUDE) $(H264BS_INCLUDE) $(LIBGS_C_INCLUDE) $(PORTS_INCLUDE)
 EXTRA_LIB_PATHS := $(EXTRA_LIB_PATHS) $(PORTS_LIB_ROOT)
 
+$(info EXTRA_INC_PATHS = $(EXTRA_INC_PATHS))
+
 # include $(NACL_SDK_ROOT)/tools/common.mk
 
 # Dirty hack to allow 'make serve' to work in this directory
@@ -23,8 +25,8 @@ HTTPD_PY := $(HTTPD_PY) --no-dir-check
 # LIBS = ppapi_gles2 ppapi ppapi_cpp pthread curl z ssl crypto nacl_io
 LIBS = -lpthread -lcurl -lz -lssl -lcrypto
 
-CFLAGS += -Wall $(COMMON_C_C_FLAGS) $(OPUS_C_FLAGS)
-CXXFLAGS += -v
+CFLAGS += -Wall $(COMMON_C_C_FLAGS) $(OPUS_C_FLAGS) -fno-ident -Os -flto -xc -E -v
+CXXFLAGS += -Wall -fno-ident -Os -flto -xc -E -v
 
 SOURCES = \
     $(OPUS_SOURCE)           \
@@ -54,4 +56,4 @@ SOURCES = \
 # $(eval $(call NMF_RULE,$(TARGET),))
 
 $(TARGET): $(SOURCES)
-	clang++ $(SOURCES) $(LIBS)
+	g++ $(SOURCES) $(LIBS)
