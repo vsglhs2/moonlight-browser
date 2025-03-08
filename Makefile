@@ -13,20 +13,22 @@ include ports.mk
 EXTRA_INC_PATHS := $(EXTRA_INC_PATHS) $(NACL_C_INCLUDE) $(COMMON_C_INCLUDE) $(OPUS_INCLUDE) $(H264BS_INCLUDE) $(LIBGS_C_INCLUDE) $(PORTS_INCLUDE)
 EXTRA_LIB_PATHS := $(EXTRA_LIB_PATHS) $(PORTS_LIB_ROOT)
 
-$(info EXTRA_INC_PATHS = $(EXTRA_INC_PATHS))
+all: $(TARGET)
 
-# include $(NACL_SDK_ROOT)/tools/common.mk
+empty :=
+space := $(empty) $(empty)
+COLON_INC_PATHS := $(subst $(space),:,$(EXTRA_INC_PATHS))
 
-# Dirty hack to allow 'make serve' to work in this directory
-HTTPD_PY := $(HTTPD_PY) --no-dir-check
+sources:
+    $(info EXTRA_INC_PATHS = $(EXTRA_INC_PATHS))
+    $(info COLON_INC_PATHS = $(COLON_INC_PATHS))
 
-# CHROME_ARGS += --allow-nacl-socket-api=localhost
-
-# LIBS = ppapi_gles2 ppapi ppapi_cpp pthread curl z ssl crypto nacl_io
 LIBS = -lpthread -lcurl -lz -lssl -lcrypto
 
-CFLAGS += -Wall $(COMMON_C_C_FLAGS) $(OPUS_C_FLAGS) -fno-ident -Os -flto -xc -E -v
-CXXFLAGS += -Wall -fno-ident -Os -flto -xc -E -v
+# CFLAGS += -Wall $(COMMON_C_C_FLAGS) $(OPUS_C_FLAGS) -fno-ident -Os -flto -xc -E -v
+CFLAGS += -Wno-everything $(COMMON_C_C_FLAGS) $(OPUS_C_FLAGS) -fno-ident -Os -flto -xc -E -v
+# CXXFLAGS += -Wall -fno-ident -Os -flto -xc -E -v
+CXXFLAGS += -Wno-everything -fno-ident -Os -flto -xc -E -v
 
 SOURCES = \
     $(OPUS_SOURCE)           \
@@ -56,4 +58,5 @@ SOURCES = \
 # $(eval $(call NMF_RULE,$(TARGET),))
 
 $(TARGET): $(SOURCES)
-	g++ $(SOURCES) $(LIBS)
+
+	g++ $(SOURCES) $(LIBS) -I $(EXTRA_INC_PATHS)
